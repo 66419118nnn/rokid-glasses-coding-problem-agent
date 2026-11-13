@@ -1,63 +1,63 @@
-# 部署
+# Deployment
 
-分两端：眼镜上的 AIUI 智能体（client），和主机上的桥接服务（server）。可以只开一端调试，但完整链路需要两端都通。
+Two sides: the AIUI agent on the glasses (`client/`) and the bridge on the host (`server/`). Each side can be debugged alone, but the full path needs both.
 
 ---
 
-## A. 眼镜端（client）
+## A. Glasses side (`client/`)
 
-### 1. 填配置
+### 1. Fill in the config
 
-编辑 `client/config.js`：
+Edit `client/config.js`:
 
 ```js
 export const BRIDGE_URL = 'https://<your-domain>/rokid/ask-raw';
-export const BRIDGE_AK = '<与 server accessKey 一致>';
+export const BRIDGE_AK = '<same value as server accessKey>';
 export const QUESTION = '这是一道编程题的照片，请按系统提示解答。';
 ```
 
-### 2. 导入 AIUI Studio
+### 2. Import into AIUI Studio
 
-1. 打开 <https://aiui.rokid.com>，用 Rokid 账号登录
-2. 新建智能体 → **本地导入** → 选择 `client/` 目录（目录里要有 `app.json`）
-3. 进入项目 → **真机调试** → 填「意图描述」，例如：
-   `用户说看题时，拍下题目并给出解题思路和 C++ 代码`
-4. 点 **重新打包并保存**，等左侧状态变为「已同步」、顶部出现「调试版本已就绪」
+1. Open <https://aiui.rokid.com> and sign in with your Rokid account
+2. New agent → **Local import** → select the `client/` folder (it must contain `app.json`)
+3. Open the project → **Device debug** → fill the intent description, e.g.:
+   `When the user asks about a problem, photograph it and give the approach plus C++ code`
+4. Click **Repack and save** and wait for the status to become "synced" and the green "debug version ready" banner
 
-### 3. 推到眼镜
+### 3. Push to the glasses
 
-1. 乐奇 App → 设置 → 开发者 → **更新眼镜资源包**，等「智能体资源包下载成功」
-2. 眼镜上说：**“乐奇，打开 <你的智能体名> 智能体”**
-3. 对准题目 → **单击镜腿**拍照
+1. Rokid AI app → Settings → Developer → **Update glasses resource pack**, wait for "resource pack downloaded"
+2. On the glasses, say: **"open <your-agent>"**
+3. Aim at the problem and **single-click the temple**
 
-> `client/` 里的 `.aix/agent-id` 是导入时生成的，请不要跨账号复用；公开仓库已忽略。
+> `.aix/agent-id` inside `client/` is generated on import; do not reuse it across accounts. It is gitignored.
 
-### 4. 验收
+### 4. Acceptance
 
-- 取景画面正常（640×480 低码率预览）
-- 拍照后状态行出现 `来源：default 3024×4032 亮度 XX`
-- 答案出来后上下滑动可翻页，且**不会**再触发拍照
-- 等待时状态行每 10 秒刷新「主机还在思考，已等 N 秒…」
+- The viewfinder appears (640×480 low-bitrate preview)
+- After capture the status line shows `source: default 3024×4032 luma XX`
+- Swiping up/down pages the answer and does **not** trigger a capture
+- While waiting, the status line refreshes every 10 s: "host is still thinking, waited N s"
 
 ---
 
-## B. 主机端（server）
+## B. Host side (`server/`)
 
-### 1. 依赖
+### 1. Dependencies
 
-- Node.js 20+（DSH 自带运行时亦可）
-- DSH（DeepSeek Harness）；插件通过 `agents` / `agentDefaultModel` / `attachments` / `llm` 注入
-- Windows + WSL，且 `wsl g++ --version` 可用（Ubuntu 建议 `apt install build-essential`）
+- Node.js 20+ (DSH's bundled runtime is fine)
+- DSH (DeepSeek Harness); the plugin injects `agents` / `agentDefaultModel` / `attachments` / `llm`
+- Windows + WSL with `wsl g++ --version` working (`apt install build-essential` on Ubuntu)
 
-### 2. 安装插件
+### 2. Install the plugin
 
-把 `server/` 放到 DSH 本地插件目录（例如 `~/.dsh/local-plugins/rokid-bridge-dsh`），在 profile 的 `package.json` 里 link：
+Put `server/` into the DSH local plugin directory (e.g. `~/.dsh/local-plugins/rokid-bridge-dsh`) and link it in the profile's `package.json`:
 
 ```json
 "dependencies": { "rokid-bridge-dsh": "link:C:/path/to/rokid-bridge-dsh" }
 ```
 
-在 profile 的 `cordis.patch.yml` 里插入配置（注意：同 id 的后续 patch 会覆盖 `config`，要一次写全）：
+Insert the plugin config in the profile's `cordis.patch.yml` (note: a later patch with the same id replaces `config`, so write all fields at once):
 
 ```yaml
 - insert:
@@ -70,21 +70,21 @@ export const QUESTION = '这是一道编程题的照片，请按系统提示解�
         reasoningEffort: max
         selftestEscalations: 1
         selftestBudgetSeconds: 190
-        selftestWslDistro: ''        # 留空 = 默认 WSL 发行版
+        selftestWslDistro: ''        # empty = default WSL distro
 ```
 
-重载 DSH 后：
+Reload DSH and check:
 
 ```bash
 curl http://127.0.0.1:8091/health
 # {"status":"ok","service":"rokid-bridge"}
 ```
 
-### 3. 公网入口
+### 3. Public entry
 
-桥接服务只监听回环，公网访问需要反代或隧道。
+The bridge only listens on loopback; expose it with a reverse proxy or tunnel.
 
-**Caddy（推荐，自动 HTTPS）**
+**Caddy (recommended, automatic HTTPS)**
 
 ```caddyfile
 <your-domain> {
@@ -96,43 +96,43 @@ curl http://127.0.0.1:8091/health
 }
 ```
 
-> `flush_interval -1` 用于 SSE 流式输出，`/chat` 必需；`/ask-raw` 是普通 JSON，不受影响。
-> 如果 Caddy 配置了 `admin off`，改完要 `systemctl restart caddy`，`reload` 无效。
+> `flush_interval -1` is required for the `/chat` SSE stream; `/ask-raw` is plain JSON and unaffected.
+> If Caddy runs with `admin off`, use `systemctl restart caddy` after edits; `reload` has no effect.
 
-**Cloudflare Tunnel（没有公网 IP 时）**
+**Cloudflare Tunnel (no public IP)**
 
 ```bash
 cloudflared tunnel --url http://127.0.0.1:8091
 ```
 
-把生成的 `https://xxx.trycloudflare.com` 填进 `client/config.js` 的 `BRIDGE_URL`（路径加 `/ask-raw`）。
+Use the generated `https://xxx.trycloudflare.com` in `client/config.js` (`BRIDGE_URL`, path `/ask-raw`).
 
-### 4. 反向隧道（可选）
+### 4. Reverse SSH tunnel (optional)
 
-主机在 NAT 后面时，也可以让主机主动 `ssh -R 127.0.0.1:8091:127.0.0.1:8091` 到一台有公网 IP 的跳板机，再由跳板机的 Caddy 反代。只绑跳板机的回环地址，不要用 `0.0.0.0`。
+If the host is behind NAT, let it open `ssh -R 127.0.0.1:8091:127.0.0.1:8091` to a jump host with a public IP, then reverse-proxy from that host's Caddy. Bind the jump host's loopback only; never `0.0.0.0`.
 
 ---
 
-## C. 验收清单
+## C. Acceptance checklist
 
-| 项 | 命令 / 操作 | 期望 |
+| Item | Command / action | Expected |
 |---|---|---|
-| 健康 | `curl <base>/health` | `{"status":"ok"}` |
-| 鉴权 | 不带 AK 调 `/ask-raw` | `401` |
-| 文字 | `POST /ask` 纯文本 | `200` + 答案 |
-| 图片 | `POST /ask-raw` 传一张题图 | `200`，答案能读出题干 |
-| 自检 | 日志出现 `[SELFTEST] compile=ok cases=N/N` | 答案末尾「已通过编译与 N 组用例」 |
-| 眼镜 | 单击镜腿拍一张 | 屏幕出答案，状态行有来源/像素/亮度 |
+| Health | `curl <base>/health` | `{"status":"ok"}` |
+| Auth | `/ask-raw` without AK | `401` |
+| Text | `POST /ask` text only | `200` + answer |
+| Image | `POST /ask-raw` with a problem photo | `200`, text readable from the image |
+| Selftest | log shows `[SELFTEST] compile=ok cases=N/N` | answer ends with "passed compile and N test cases" |
+| Glasses | single-click temple | answer on screen; status line shows source/pixels/luma |
 
 ---
 
-## D. 常见问题
+## D. Troubleshooting
 
-| 现象 | 排查 |
+| Symptom | What to check |
 |---|---|
-| 眼镜显示“手机已断开” | 多为取景流过大拖垮运行时；确认预览是 640×480，不要申请 4K |
-| 拍出来全黑 | 检查 `takePhoto` 的 `mode`；代码会依次退 `default → wide → telephoto`，状态行会显示实际模式与亮度 |
-| 眼镜端超时 | 眼镜 fetch 超时 240s、自检预算 190s；难题可调大两处，但要保证“预算 + 模型生成 < 客户端超时” |
-| 答案带“某组用例未通过” | 编译通过，个别生成用例期望值可疑（日志 `suspect-case=1`），不是代码没跑 |
-| 公网 502 | 看隧道是否在线、反代是否指向 8091、`/health` 是否通 |
-| 日志乱码 | 日志按 UTF-8 写入；Windows 下用 `Get-Content -Encoding UTF8 -Tail 60` |
+| Glasses show "phone disconnected" | Usually an oversized preview stream overloading the runtime; make sure the preview is 640×480, not 4K |
+| Photos come out black | Check `takePhoto` mode; the app falls back `default → wide → telephoto`, and the status line shows the actual mode and luma |
+| Glasses request times out | Glasses fetch timeout 240 s, selftest budget 190 s; raising both is fine, but keep "budget + model generation < client timeout" |
+| Answer says a case failed | Compile passed; the generated expected value is suspicious (`suspect-case=1`). Not a compile failure |
+| Public 502 | Check the tunnel, the reverse proxy target (8091), and `/health` |
+| Garbled logs | Logs are UTF-8; on Windows use `Get-Content -Encoding UTF8 -Tail 60` |

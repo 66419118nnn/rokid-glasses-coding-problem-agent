@@ -166,10 +166,6 @@ docs/
   images/              UI mockups and gesture diagram
 ```
 
-> Detailed protocol and deployment guides are currently in Chinese under `docs/`. Ask if you need English versions.
-
----
-
 ## 6. Quick start
 
 1. **Client**: fill `client/config.js` → AIUI Studio → New agent → Local import `client/` → Device debug → fill the intent description → Repack and save

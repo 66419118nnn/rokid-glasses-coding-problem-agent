@@ -31,7 +31,7 @@
 | 项 | 版本 / 说明 |
 |---|---|
 | Node.js | 20+（DSH 自带运行时也可以） |
-| DSH（DeepSeek Harness） | 服务端以 Host 插件形式运行；没有 DSH 的话需要按 `docs/protocol.md` 自己实现一个兼容服务 |
+| DSH（DeepSeek Harness） | 服务端以 Host 插件形式运行；没有 DSH 的话需要按 `docs/protocol.zh-CN.md` 自己实现一个兼容服务 |
 | WSL + build-essential | `wsl g++ --version` 可用；自检用它做 Linux 编译 |
 | AIUI Studio | 浏览器打开即可，不需要本地 Android 工具链 |
 | `aix` CLI（可选） | 想在命令行打包/装包时用：`npm i -g @yodaos-pkg/aix-cli` |
@@ -161,8 +161,8 @@ server/                DSH Host 插件（Node，无第三方依赖）
   selftest.js          g++ 编译 + 用例验证
   cordis.patch.yml     DSH 插件挂载配置
 docs/
-  protocol.md          /ask-raw、/ask、/chat SSE 协议
-  deploy.md            两端部署步骤与验收清单
+  protocol.md / protocol.zh-CN.md    /ask-raw、/ask、/chat SSE 协议（英/中）
+  deploy.md / deploy.zh-CN.md       两端部署步骤与验收清单（英/中）
   images/              界面示意与手势图
 ```
 
@@ -176,7 +176,7 @@ docs/
 4. **公网**：Caddy `handle_path /rokid/* { reverse_proxy 127.0.0.1:8091 { flush_interval -1 } }`
 5. **上眼镜**：乐奇 App → 设置 → 开发者 → 更新眼镜资源包 → 说“打开 xxx 智能体”
 
-完整步骤、配置表、验收清单和排错表见 [docs/deploy.md](docs/deploy.md)；接口字段见 [docs/protocol.md](docs/protocol.md)。
+完整步骤、配置表、验收清单和排错表见 [docs/deploy.zh-CN.md](docs/deploy.zh-CN.md)；接口字段见 [docs/protocol.zh-CN.md](docs/protocol.zh-CN.md)。
 
 ---
 
