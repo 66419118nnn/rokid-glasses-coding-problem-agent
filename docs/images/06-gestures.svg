@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="360" viewBox="0 0 860 360" role="img" aria-label="Rokid Glasses gesture map">
+  <rect width="860" height="360" fill="#0b0f0b"/>
+  <text x="32" y="52" fill="#7CFF7C" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="24" font-weight="700">操作逻辑</text>
+  <text x="32" y="78" fill="#4E9A4E" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="13">Rokid Glasses · AIUI 页面级手势</text>
+
+  <!-- glasses sketch -->
+  <g transform="translate(40,110)">
+    <rect x="0" y="20" width="70" height="46" rx="12" fill="none" stroke="#7CFF7C" stroke-width="3"/>
+    <rect x="96" y="20" width="70" height="46" rx="12" fill="none" stroke="#7CFF7C" stroke-width="3"/>
+    <path d="M70 40 q13 -10 26 0" fill="none" stroke="#7CFF7C" stroke-width="3"/>
+    <path d="M0 34 h-26" stroke="#7CFF7C" stroke-width="3"/>
+    <path d="M166 34 h26" stroke="#7CFF7C" stroke-width="3"/>
+    <circle cx="192" cy="34" r="9" fill="#7CFF7C"/>
+    <circle cx="192" cy="34" r="16" fill="none" stroke="#7CFF7C" stroke-width="1.5" opacity="0.5"/>
+  </g>
+  <text x="40" y="222" fill="#8CD88C" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="13">镜腿触摸区（右侧）</text>
+
+  <!-- gesture rows -->
+  <g font-family="Microsoft YaHei, PingFang SC, sans-serif">
+    <text x="360" y="132" fill="#E8FFE8" font-size="18" font-weight="700">单击镜腿</text>
+    <text x="500" y="132" fill="#7CFF7C" font-size="18">→</text>
+    <text x="536" y="132" fill="#E8FFE8" font-size="18">拍照（Enter，800ms 去重）</text>
+
+    <text x="360" y="186" fill="#E8FFE8" font-size="18" font-weight="700">上下滑动</text>
+    <text x="500" y="186" fill="#7CFF7C" font-size="18">→</text>
+    <text x="536" y="186" fill="#E8FFE8" font-size="18">答案翻页（ArrowUp / ArrowDown）</text>
+
+    <text x="360" y="240" fill="#E8FFE8" font-size="18" font-weight="700">双击镜腿</text>
+    <text x="500" y="240" fill="#FFD24E" font-size="18">→</text>
+    <text x="536" y="240" fill="#B9C7B9" font-size="18">系统退出（不使用，留给宿主）</text>
+
+    <text x="360" y="294" fill="#E8FFE8" font-size="18" font-weight="700">戒指 / 指针</text>
+    <text x="500" y="294" fill="#7CFF7C" font-size="18">→</text>
+    <text x="536" y="294" fill="#E8FFE8" font-size="18">点页面「拍摄」按钮 = 拍照</text>
+  </g>
+
+  <text x="32" y="330" fill="#4E9A4E" font-family="Microsoft YaHei, PingFang SC, sans-serif" font-size="12">GlobalHook 是镜腿触摸信号，滑动也会上报，不作为拍照触发。</text>
+</svg>
