@@ -1,78 +1,80 @@
 # rokid-bridge-dsh
 
-一个跑在 DSH（DeepSeek Harness）里的 Host 插件，为 Rokid 眼镜的 AIUI 智能体和灵珠自定义智能体提供 HTTP 入口：
+**English** | [简体中文](README.zh-CN.md)
 
-| 方法 | 路径 | 用途 |
+A DSH (DeepSeek Harness) Host plugin that exposes HTTP endpoints for Rokid Glasses AIUI agents and Lingzhu custom agents:
+
+| Method | Path | Purpose |
 |---|---|---|
-| POST | `/ask-raw`、`/rokid/ask-raw` | 原始图片字节 + `?q=` 问题 → `{"answer": "..."}`（眼镜 AIUI 直连） |
-| POST | `/ask`、`/rokid/ask` | JSON `{text,image:{data,mime_type}}` → `{"answer": "..."}` |
-| POST | `/chat`、`/rokid/chat` | 灵珠命名事件 SSE（`event:message` / `event:done`） |
-| GET | `/health`、`/` | 健康检查 |
+| POST | `/ask-raw`, `/rokid/ask-raw` | Raw image bytes + `?q=` question → `{"answer": "..."}` (AIUI direct) |
+| POST | `/ask`, `/rokid/ask` | JSON `{text,image:{data,mime_type}}` → `{"answer": "..."}` |
+| POST | `/chat`, `/rokid/chat` | Lingzhu named-event SSE (`event:message` / `event:done`) |
+| GET | `/health`, `/` | Health check |
 
-所有入口共用同一条回答链路：DSH agent 会话 → 模型 →（含 C++ 代码时）主机侧 `g++` 真编译 + 跑用例 → 返回最终版。
+All endpoints share one answer pipeline: DSH agent session → model → (when the answer contains C++) host-side `g++` compile + test cases → final answer.
 
-## 依赖
+## Requirements
 
-- DSH（插件通过 `agents` / `agentDefaultModel` / `attachments` / `llm` 注入）
+- DSH (the plugin injects `agents` / `agentDefaultModel` / `attachments` / `llm`)
 - Node.js 20+
-- Windows + WSL（自检编译用 Linux `g++`，建议 `build-essential`）
-- 可选：Caddy / 反向隧道，把 `127.0.0.1:<port>` 暴露成公网 HTTPS
+- Windows + WSL (Linux `g++` for the self-test; `build-essential` recommended)
+- Optional: Caddy / reverse tunnel to expose `127.0.0.1:<port>` as public HTTPS
 
-## 安装
+## Install
 
-把本目录作为本地插件放进 DSH profile（例如 `~/.dsh/local-plugins/rokid-bridge-dsh`），在 profile 的 `package.json` 里 link 它，并在 `cordis.patch.yml` 里插入一行配置：
+Put this directory into the DSH profile as a local plugin (e.g. `~/.dsh/local-plugins/rokid-bridge-dsh`), link it in the profile's `package.json`, and insert a config row in `cordis.patch.yml`:
 
 ```yaml
 - insert:
     - id: rokid-bridge-dsh
       name: 'rokid-bridge-dsh'
       config:
-        port: 8091          # 生产可改成 8090
+        port: 8091          # 8090 in production is fine too
         accessKey: '<YOUR_ACCESS_KEY>'
         selftestForAsk: true
         reasoningEffort: max
 ```
 
-重启 / 重载 DSH 后，`curl http://127.0.0.1:8091/health` 应返回：
+Reload DSH; `curl http://127.0.0.1:8091/health` should return:
 
 ```json
 {"status":"ok","service":"rokid-bridge"}
 ```
 
-## 关键配置
+## Key configuration
 
-| 字段 | 默认 | 说明 |
+| Field | Default | Description |
 |---|---|---|
-| `host` / `port` | `127.0.0.1` / `8091` | 监听地址；只绑回环，公网交给反代 |
-| `accessKey` | 空 | Bearer AK；留空则回退读 `legacyConfigPath` 的 `rokid_ak` |
-| `reasoningEffort` | 空 | 覆盖思考强度（如 `max`）；留空沿用 DSH 当前档位 |
-| `selftestEnabled` | `true` | 回答含 C++ 时是否编译 + 跑用例 |
-| `selftestForAsk` | `false` | `/ask` 与 `/ask-raw` 是否也走自检 |
-| `selftestEscalations` | `1` | 机械重写卡住后转 agent 深度调试的次数 |
-| `selftestBudgetSeconds` | `170` | 自检看门狗；到点返回最后一版并标注未通过 |
-| `turnTimeoutSeconds` | `90` | 单回合超时 |
-| `imageMinSharpness` 等 | 见 `index.js` | `/chat` 的图片质量闸 |
+| `host` / `port` | `127.0.0.1` / `8091` | Listen address; loopback only, public entry is a reverse proxy |
+| `accessKey` | empty | Bearer AK; empty falls back to `rokid_ak` in `legacyConfigPath` |
+| `reasoningEffort` | empty | Override reasoning effort (e.g. `max`); empty uses the DSH session setting |
+| `selftestEnabled` | `true` | Compile + run cases when the answer contains C++ |
+| `selftestForAsk` | `false` | Also run the self-test for `/ask` and `/ask-raw` |
+| `selftestEscalations` | `1` | Agent deep-debug rounds after mechanical rewrites stall |
+| `selftestBudgetSeconds` | `170` | Self-test watchdog; returns the last version with a note at the cap |
+| `turnTimeoutSeconds` | `90` | Per-turn timeout |
+| `imageMinSharpness` etc. | see `index.js` | `/chat` image quality gates |
 
-完整字段见 `index.js` 顶部的 `DEFAULTS` 与 Config Schema。
+See `DEFAULTS` and the Config Schema at the top of `index.js` for the full list.
 
-## 自检是什么
+## What the self-test does
 
-模型输出里出现 C++ 代码时，插件会：
+When the model output contains C++ code, the plugin:
 
-1. 抽取代码写入临时 `main.cpp`
-2. `wsl g++ -std=c++17 -O2 -Wall` 编译
-3. 生成 3 组用例，逐组运行并比对输出
-4. 编译/用例失败就把 stderr 或“输入/期望/实际”回灌给模型重写
-5. 通过后只输出最终版，并在末尾注明「已通过编译与 N 组用例」
+1. Extracts the code into a temporary `main.cpp`
+2. Compiles with `wsl g++ -std=c++17 -O2 -Wall`
+3. Generates 3 test cases and runs them one by one
+4. Feeds compile stderr or "input/expected/actual" back to the model for a rewrite
+5. Returns only the final version, ending with "passed compile and N test cases"
 
-日志：`[SELFTEST]` 行写入 `selftestLogPath`（默认 `<home>/rokid-bridge/selftest.log`）。
+Logs: `[SELFTEST]` lines go to `selftestLogPath` (default `<home>/rokid-bridge/selftest.log`).
 
-## 安全
+## Security
 
-- 只监听 `127.0.0.1`，不要直接把端口暴露到公网
-- `accessKey` 不要硬编码进仓库；用 DSH 配置或环境变量
-- 公网入口请加 HTTPS，并限制来源（安全组、Cloudflare Tunnel、Caddy 均可）
-- 图片入口限制 12MB；入库另有 8MB 上限
+- Listen on `127.0.0.1` only; never expose the port directly to the internet
+- Do not hardcode `accessKey` in the repo; use DSH config or environment variables
+- Put HTTPS and source restrictions in front of the public entry (security group, Cloudflare Tunnel, Caddy)
+- Image ingest is capped at 12 MB; the storage pipeline caps at 8 MB
 
 ## License
 
