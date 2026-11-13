@@ -1,188 +1,192 @@
 # rokid-glasses-coding-problem-agent
 
-**一句话：戴在乐奇（Rokid）眼镜上的编程题智能体——单击镜腿拍下题目，主机侧大模型作答并用 g++ 真编译、跑用例，答案回到眼镜屏幕上。**
+**A coding-problem agent for Rokid Glasses: tap the temple to photograph a problem; a self-hosted bridge answers it, compiles the model's C++ with g++, runs test cases, and sends the verified answer back to the glasses.**
 
-不是“让模型口头自检”，而是主机真的把模型写的 C++ 编译一遍、跑几组用例，通过了才把最终版发回眼镜。
+This is not "the model says it checked itself". The host actually compiles the generated C++ and runs test cases before returning the final answer.
 
----
-
-## 一、复刻必须准备什么
-
-### 硬件
-
-| 项 | 说明 |
-|---|---|
-| Rokid Glasses | 中文版乐奇 App 配对的消费版眼镜即可；本项目不依赖开发者数据线 |
-| Windows 主机 | 跑桥接服务和 WSL 里的 g++；也可以用 Linux 主机，但要自己替换自检的编译后端 |
-| 手机 | 装乐奇 App，用来更新眼镜资源包、触发智能体 |
-
-### 账号与权限
-
-| 项 | 说明 |
-|---|---|
-| Rokid 账号 | 能登录 [AIUI Studio](https://aiui.rokid.com) 即可；账号要和手机乐奇 App 一致 |
-| 大模型 | DSH 里配置一个支持图片输入的模型（示例：DeepSeek V4.1 Flash；只要 OpenAI 兼容即可） |
-| 公网 HTTPS 入口 | 域名 + Caddy，或 Cloudflare Tunnel；眼镜要能从公网访问到你的主机 |
-
-### 软件
-
-| 项 | 版本 / 说明 |
-|---|---|
-| Node.js | 20+（DSH 自带运行时也可以） |
-| DSH（DeepSeek Harness） | 服务端以 Host 插件形式运行；没有 DSH 的话需要按 `docs/protocol.md` 自己实现一个兼容服务 |
-| WSL + build-essential | `wsl g++ --version` 可用；自检用它做 Linux 编译 |
-| AIUI Studio | 浏览器打开即可，不需要本地 Android 工具链 |
-| `aix` CLI（可选） | 想在命令行打包/装包时用：`npm i -g @yodaos-pkg/aix-cli` |
-
-### 网络
-
-- 眼镜能上网（通过手机热点或蓝牙转发均可）
-- 主机上的桥接服务只监听 `127.0.0.1`，公网入口由 Caddy / 隧道反代
-- 如果走隧道，确认 `flush_interval -1`（SSE 需要，`/ask-raw` 不受影响）
+**[简体中文](README.zh-CN.md) | English**
 
 ---
 
-## 二、效果与预期
+## 1. What you need to replicate this
 
-### 一次完整使用
+### Hardware
 
-1. 眼镜上说“打开 xxx 智能体”
-2. 屏幕上出现 640×480 的低码率取景画面
-3. 对准题目，**单击镜腿** → 全画幅拍照（3024×4032）
-4. 上传到主机，状态行每 10 秒刷新“主机还在思考，已等 N 秒”
-5. 主机：模型作答 → 抽取 C++ → `g++` 编译 → 跑 3 组用例 → 失败回灌重写
-6. 眼镜屏幕出答案，末尾带「已通过编译与 N 组用例」；上下滑动翻页
+| Item | Notes |
+|---|---|
+| Rokid Glasses | Consumer edition paired with the Chinese Rokid AI app; no developer cable required |
+| Windows host | Runs the bridge and WSL g++; a Linux host works if you replace the compile backend |
+| Phone | Rokid AI app, used to update the glasses resource pack and launch the agent |
 
-### 实测时延（Windows + WSL g++ 15.2 + DeepSeek V4.1 Flash，effort=max）
+### Accounts & access
 
-| 场景 | 时延 | 结果 |
+| Item | Notes |
+|---|---|
+| Rokid account | Must be able to sign in to [AIUI Studio](https://aiui.rokid.com); same account as the phone app |
+| Model | A vision-capable model configured in DSH (example: DeepSeek V4.1 Flash; any OpenAI-compatible model works) |
+| Public HTTPS endpoint | Domain + Caddy, or Cloudflare Tunnel; the glasses must reach your host over the internet |
+
+### Software
+
+| Item | Notes |
+|---|---|
+| Node.js | 20+ (DSH's bundled runtime also works) |
+| DSH (DeepSeek Harness) | The server runs as a Host plugin; without DSH, implement a compatible service per `docs/protocol.md` |
+| WSL + build-essential | `wsl g++ --version` must work; used for real compilation |
+| AIUI Studio | Browser-based; no local Android toolchain needed |
+| `aix` CLI (optional) | For command-line packaging/install: `npm i -g @yodaos-pkg/aix-cli` |
+
+### Network
+
+- The glasses need internet (phone hotspot or Bluetooth relay both work)
+- The bridge listens on `127.0.0.1` only; expose it through Caddy or a tunnel
+- For the 灵珠 SSE path (`/chat`), configure `flush_interval -1` on the reverse proxy
+
+---
+
+## 2. What to expect
+
+### A full session
+
+1. Say "open <your-agent>" on the glasses
+2. A 640×480 low-bitrate viewfinder appears
+3. Aim at the problem and **single-click the temple** → full-frame 3024×4032 photo
+4. The photo is uploaded; the status line refreshes every 10 s ("host is still thinking, waited N s")
+5. Host: model answers → extract C++ → `g++` compiles → run 3 test cases → feed failures back for a rewrite
+6. The answer appears on the glasses, ending with "passed compile and N test cases"; swipe up/down to scroll
+
+### Measured latency (Windows + WSL g++ 15.2 + DeepSeek V4.1 Flash, effort=max)
+
+| Case | Latency | Result |
 |---|---|---|
-| 简单题（求和、回文） | 15–25 秒 | 编译通过、3/3 用例通过 |
-| 中等题（LIS、边界处理） | 30–60 秒 | 多数 3/3；个别用例可疑会标注 |
-| 难题 / 用例可疑 | 1–3.5 分钟 | 深度调试最多 90 秒一次；到预算上限返回最后一版并说明 |
-| 失败兜底 | ≤ 4 分钟 | 眼镜端 240 秒超时；主机自检预算 190 秒 |
+| Easy (sum, palindrome) | 15–25 s | compiles, 3/3 cases pass |
+| Medium (LIS, edge cases) | 30–60 s | mostly 3/3; a suspicious case is flagged |
+| Hard / suspicious cases | 1–3.5 min | one 90 s deep-debug escalation; returns the last version at the budget cap |
+| Fallback | ≤ 4 min | glasses timeout 240 s; selftest budget 190 s |
 
-### 预期内 / 预期外
+### Expected / not expected
 
-- ✅ 题目拍清楚 → 答案通常可直接抄；代码是纯文本、四空格缩进、中文注释
-- ✅ 题目拍不全/糊 → 模型会提示重拍，不会硬编
-- ⚠️ 自检用例由模型生成，个别期望值可能本身有误（日志 `suspect-case=1`）；这类会返回答案但标注哪组未通过
-- ⚠️ 当前 AIUI 运行时没有 `<camera>` 组件，`enableSystemPreview` 也不驻留；取景用的是页面自己的低码率流
-- ⚠️ 取景流不要申请 4K，会拖垮眼镜端运行时（本项目固定 640×480）
+- ✅ Clear problem photo → answer is usually directly usable; plain-text C++, 4-space indent, Chinese comments
+- ✅ Incomplete or blurry photo → the model asks for a retake instead of guessing
+- ⚠️ Test cases are generated by the model; an occasional expected value is wrong (`suspect-case=1`). The answer is still returned, with the failing case named
+- ⚠️ The current AIUI runtime has no `<camera>` component, and `enableSystemPreview` does not persist; the viewfinder is the app's own low-bitrate stream
+- ⚠️ Do not request a 4K preview stream; it destabilizes the glasses runtime (this project uses 640×480)
 
 ---
 
-## 三、各个窗口的演示与操作逻辑
+## 3. Screens and interaction logic
 
-> 下面图片是按真实 480×352 布局绘制的界面示意，颜色、字号、按钮位置与眼镜端一致。
+> The screenshots below are drawn to the real 480×352 layout — colors, font sizes and button positions match the glasses UI. The on-device UI is Chinese.
 
-### 1. 取景
+### 1. Viewfinder
 
-![取景](docs/images/01-viewfinder.png)
+![viewfinder](docs/images/01-viewfinder.png)
 
-- 上方 46% 是低码率取景画面，用来对准题目
-- 状态行显示「对准题目，单击镜腿拍照」，右侧是取景分辨率
-- 底部是手势提示和「拍摄」按钮（戒指/指针可点）
+- Top 46% is a low-bitrate preview used for framing
+- Status line: "aim at the problem, single-click the temple"; right side shows the preview resolution
+- Bottom: gesture hint and a "拍摄" (shoot) button for the ring/pointer
 
-### 2. 拍照
+### 2. Capture
 
-![拍照](docs/images/02-capturing.png)
+![capture](docs/images/02-capturing.png)
 
-- 按下后立即释放取景流，交给系统相机拍全画幅
-- 状态行显示实际模式、像素尺寸、平均亮度（黑帧会被拦下重拍）
+- The preview stream is released immediately; the system camera takes the full-frame still
+- Status line shows the mode, pixel size and average luma (black frames are rejected and retried)
 
-### 3. 等待主机
+### 3. Waiting for the host
 
-![等待](docs/images/03-thinking.png)
+![waiting](docs/images/03-thinking.png)
 
-- 状态行每 10 秒刷新「主机还在思考，已等 N 秒…（可以继续等）」
-- 这个计时在眼镜本地，不依赖主机回包，所以主机忙时也能看到“没死”
-- 最长等 240 秒；主机侧自检预算 190 秒
+- The status line refreshes every 10 s: "host is still thinking, waited N s… (you can keep waiting)"
+- The counter is local to the glasses, so it keeps ticking even while the host is busy
+- Maximum wait: 240 s; the host's selftest budget is 190 s
 
-### 4. 答案与翻页
+### 4. Answer and paging
 
-![答案](docs/images/04-answer.png)
+![answer](docs/images/04-answer.png)
 
-- 状态行保留来源信息：`来源：default 3024×4032 亮度 87`
-- 答案区可滚动；**上下滑动**翻页，不会触发拍照
-- 底部「再拍一张」回到取景
+- The status line keeps the source info: `来源：default 3024×4032 亮度 87`
+- The answer area scrolls; **swipe up/down** to page, without triggering a capture
+- "再拍一张" (shoot again) at the bottom returns to the viewfinder
 
-### 5. 主机自检日志
+### 5. Host selftest log
 
-![主机日志](docs/images/05-selftest-log.png)
+![host log](docs/images/05-selftest-log.png)
 
-- `[SELFTEST] compile=ok cases=3/3` 表示真的编译、真的跑了 3 组用例
-- 用例反复失败会标 `suspect-case=1`，返回最后一版并写明哪组没通过
+- `[SELFTEST] compile=ok cases=3/3` means the code was really compiled and three cases really ran
+- Repeated case failures are marked `suspect-case=1`; the host returns the last version and names the failing case
 
-### 6. 操作逻辑
+### 6. Gesture map
 
-![手势](docs/images/06-gestures.svg)
+![gestures](docs/images/06-gestures.svg)
 
-| 输入 | 官方事件 | 行为 |
+| Input | Official event | Behavior |
 |---|---|---|
-| 单击镜腿 | `Enter` | 拍照（800ms 去重） |
-| 上下滑动 | `ArrowUp` / `ArrowDown` | 答案翻页 |
-| 戒指/指针点按钮 | `bindtap` | 拍照 |
-| 双击镜腿 | 宿主系统级 | 退出（本项目不使用） |
-| 镜腿触摸 | `GlobalHook` | **不用于拍照**（滑动也会上报） |
+| Single-click temple | `Enter` | capture (800 ms debounce) |
+| Swipe up/down | `ArrowUp` / `ArrowDown` | scroll the answer |
+| Ring/pointer button | `bindtap` | capture |
+| Double-click temple | host system | exit (unused by this app) |
+| Temple touch | `GlobalHook` | **not used for capture** (also emitted on swipes) |
 
 ---
 
-## 四、它是怎么工作的
+## 4. How it works
 
 ```
-眼镜（client/）
-  640×480 取景 → 单击镜腿 → wx CameraContext 拍 3024×4032
-  → 原始 JPEG 字节 POST /ask-raw
-        │ HTTPS（Caddy / 隧道）
-主机（server/，DSH 插件）
-  Bearer AK 校验 → 图片入库 → DSH agent 会话（模型作答）
-  → 抽取 C++ → wsl g++ 编译 → 生成 3 组用例并运行
-  → 失败回灌重写（可升级到 agent 深度调试一次）
-  → 返回最终版 + 「已通过编译与 N 组用例」
+Glasses (client/)
+  640×480 viewfinder → single-click temple → wx CameraContext takes 3024×4032
+  → raw JPEG bytes POST /ask-raw
+        │ HTTPS (Caddy / tunnel)
+Host (server/, DSH plugin)
+  Bearer AK check → store image → DSH agent session (model answers)
+  → extract C++ → wsl g++ compile → generate 3 cases and run them
+  → feed failures back for a rewrite (optional one-shot agent deep debug)
+  → return final version + "passed compile and N test cases"
 ```
 
-- 眼镜端不 base64，图片以原始字节上传（省内存、省流量）
-- 主机端只监听回环，公网入口自己加 HTTPS
-- 图片临时 URL（灵珠路径）由服务端下载转 base64，并做 SSRF 防护
+- The glasses upload raw image bytes (no base64 on device: less memory, less traffic)
+- The bridge binds loopback only; put HTTPS in front
+- For the 灵珠 path, image URLs are downloaded and converted server-side, with SSRF guards
 
 ---
 
-## 五、仓库结构
+## 5. Repository layout
 
 ```
-client/                Rokid AIUI 智能体（单文件 .ink）
-  config.js            ← 部署前填 BRIDGE_URL / BRIDGE_AK
-  pages/index/index.ink 取景、拍照、上传、翻页
-server/                DSH Host 插件（Node，无第三方依赖）
-  index.js             HTTP 服务 + 会话 + 图片处理
-  selftest.js          g++ 编译 + 用例验证
-  cordis.patch.yml     DSH 插件挂载配置
+client/                Rokid AIUI agent (single-file .ink)
+  config.js            ← set BRIDGE_URL / BRIDGE_AK before deploying
+  pages/index/index.ink viewfinder, capture, upload, paging
+server/                DSH Host plugin (Node, no third-party deps)
+  index.js             HTTP server + sessions + image handling
+  selftest.js          g++ compile + test-case verification
+  cordis.patch.yml     DSH plugin mount config
 docs/
-  protocol.md          /ask-raw、/ask、/chat SSE 协议
-  deploy.md            两端部署步骤与验收清单
-  images/              界面示意与手势图
+  protocol.md          /ask-raw, /ask, /chat SSE
+  deploy.md            deployment steps and acceptance checklist
+  images/              UI mockups and gesture diagram
 ```
 
----
-
-## 六、快速开始
-
-1. **客户端**：填 `client/config.js` → AIUI Studio 新建 → 本地导入 `client/` → 真机调试填意图描述 → 重新打包并保存
-2. **服务端**：`server/` 放进 DSH 本地插件目录 → profile 里 link → `cordis.patch.yml` 插入配置（`accessKey`、`port`、`selftestForAsk: true`）
-3. **编译环境**：WSL 安装 `build-essential`，确认 `wsl g++ --version`
-4. **公网**：Caddy `handle_path /rokid/* { reverse_proxy 127.0.0.1:8091 { flush_interval -1 } }`
-5. **上眼镜**：乐奇 App → 设置 → 开发者 → 更新眼镜资源包 → 说“打开 xxx 智能体”
-
-完整步骤、配置表、验收清单和排错表见 [docs/deploy.md](docs/deploy.md)；接口字段见 [docs/protocol.md](docs/protocol.md)。
+> Detailed protocol and deployment guides are currently in Chinese under `docs/`. Ask if you need English versions.
 
 ---
 
-## 七、安全 / 去敏
+## 6. Quick start
 
-- `client/config.js` 和服务端配置里只有占位符；真实 AK 不进仓库
-- `accessKey` 用独立的、可随时撤销的值；如果不慎提交过，立即轮换
-- 桥接服务只监听 `127.0.0.1`，公网入口加 HTTPS 并限制来源
+1. **Client**: fill `client/config.js` → AIUI Studio → New agent → Local import `client/` → Device debug → fill the intent description → Repack and save
+2. **Server**: put `server/` into the DSH local plugin directory → link it in the profile → add the plugin config in `cordis.patch.yml` (`accessKey`, `port`, `selftestForAsk: true`)
+3. **Compiler**: install `build-essential` in WSL and verify `wsl g++ --version`
+4. **Public entry**: Caddy `handle_path /rokid/* { reverse_proxy 127.0.0.1:8091 { flush_interval -1 } }`
+5. **Glasses**: Rokid AI app → Settings → Developer → Update glasses resource pack → say "open <your-agent>"
+
+See [docs/deploy.md](docs/deploy.md) for the full steps, config table, acceptance checklist and troubleshooting; see [docs/protocol.md](docs/protocol.md) for the wire format.
+
+---
+
+## 7. Security / secrets
+
+- `client/config.js` and the server config contain placeholders only; real keys never enter the repo
+- Use a dedicated, revocable `accessKey`; rotate it immediately if it is ever committed
+- The bridge listens on `127.0.0.1` only; add HTTPS and source restrictions at the public entry
 
 ## License
 
