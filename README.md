@@ -1,10 +1,10 @@
 # rokid-glasses-coding-problem-agent
 
+**[简体中文](README.zh-CN.md) | English**
+
 **A coding-problem agent for Rokid Glasses: tap the temple to photograph a problem; a self-hosted bridge answers it, compiles the model's C++ with g++, runs test cases, and sends the verified answer back to the glasses.**
 
 This is not "the model says it checked itself". The host actually compiles the generated C++ and runs test cases before returning the final answer.
-
-**[简体中文](README.zh-CN.md) | English**
 
 ---
 
@@ -181,12 +181,6 @@ docs/
 See [docs/deploy.md](docs/deploy.md) for the full steps, config table, acceptance checklist and troubleshooting; see [docs/protocol.md](docs/protocol.md) for the wire format.
 
 ---
-
-## 7. Security / secrets
-
-- `client/config.js` and the server config contain placeholders only; real keys never enter the repo
-- Use a dedicated, revocable `accessKey`; rotate it immediately if it is ever committed
-- The bridge listens on `127.0.0.1` only; add HTTPS and source restrictions at the public entry
 
 ## License
 
