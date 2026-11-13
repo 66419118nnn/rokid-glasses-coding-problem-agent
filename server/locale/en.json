@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Rokid glasses bridge",
+    "description": "HTTP bridge for Rokid Glasses AIUI and Lingzhu agents (/ask-raw, /ask, /chat SSE, /health). Each request runs in a warm DSH agent session, one per device."
+  }
+}

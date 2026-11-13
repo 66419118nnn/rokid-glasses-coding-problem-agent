@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Rokid 眼镜桥接",
+    "description": "为 Rokid 眼镜 AIUI 智能体与灵珠自定义智能体提供 HTTP 入口（/ask-raw、/ask、/chat SSE、/health），每个请求交给 DSH 的 Agent 会话回答，按设备保持一个常驻会话。"
+  }
+}

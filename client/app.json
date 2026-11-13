@@ -1,0 +1,12 @@
+{
+  "pages": [
+    "pages/index/index"
+  ],
+  "permissions": [
+    "CAMERA",
+    "INTERNET"
+  ],
+  "window": {
+    "navigationBarTitleText": "拍题解题"
+  }
+}

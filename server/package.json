@@ -1,0 +1,35 @@
+{
+  "name": "rokid-bridge-dsh",
+  "version": "0.10.5",
+  "private": true,
+  "type": "module",
+  "description": "HTTP bridge for Rokid Glasses AIUI / Lingzhu agents: /chat SSE, /ask, /ask-raw, /health, with real g++ compile and test-case verification.",
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "rokid",
+    "aiui",
+    "lingzhu",
+    "bridge",
+    "selftest"
+  ],
+  "license": "MIT",
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "selftest.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

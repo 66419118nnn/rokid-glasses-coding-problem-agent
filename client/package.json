@@ -1,0 +1,9 @@
+{
+  "name": "rokid-glasses-aiui-solver-client",
+  "version": "1.0.0",
+  "description": "Rokid Glasses AIUI agent: tap to photograph, upload to a self-hosted bridge, show the verified answer.",
+  "main": "app.js",
+  "private": true,
+  "license": "MIT",
+  "dependencies": {}
+}

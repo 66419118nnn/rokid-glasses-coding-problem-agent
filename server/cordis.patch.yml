@@ -1,0 +1,16 @@
+# rokid-bridge-dsh bundle patch
+#
+# Mounts one Host plugin row. By default it listens on 127.0.0.1:8091 so it can be
+# tested without touching the existing Python bridge on 8090.
+#
+# Move it onto the production port later by overriding this row:
+#
+#   - id: rokid-bridge-dsh
+#     config:
+#       port: 8090
+#
+- insert:
+    - id: rokid-bridge-dsh
+      name: 'rokid-bridge-dsh'
+      config:
+        port: 8090

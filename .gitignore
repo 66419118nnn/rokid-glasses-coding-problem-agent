@@ -1,0 +1,10 @@
+node_modules/
+*.log
+*.aix
+*.zip
+.aix/
+bridge_config.json
+*.bak
+*.bak-*
+.chrome-*/
+.DS_Store
