@@ -223,6 +223,7 @@ export function createSelfTest({ llmText, escalate, log, config }) {
                             signal: request.signal,
                         }).catch(() => null)
                         const fixedCode = typeof outcome?.code === 'string' ? outcome.code.trim() : ''
+                        const agentSuspect = outcome?.caseSuspect === true
                         if (fixedCode !== '') {
                             log('info', `[SELFTEST] agent 调试返回了新代码（${fixedCode.length} 字符），继续验证`)
                             code = fixedCode
@@ -234,6 +235,31 @@ export function createSelfTest({ llmText, escalate, log, config }) {
                             lastSignature = ''
                             repairMisses = 0
                             continue
+                        }
+                        if (agentSuspect) {
+                            log('warn', '[SELFTEST] agent 判定某组用例的期望值可疑')
+                            if (caseRegenerations < 1) {
+                                caseRegenerations += 1
+                                const fresh = await generateCases({
+                                    code,
+                                    requestText: request.requestText,
+                                    signal: request.signal,
+                                    remaining,
+                                })
+                                if (fresh !== null && fresh.length > 0) {
+                                    baselineCases.splice(0, baselineCases.length, ...fresh.map((item) => ({ ...item })))
+                                    caseFailures.clear()
+                                    casePasses.clear()
+                                    repeats = 0
+                                    lastSignature = ''
+                                    attempts = 0
+                                    log('warn', '[SELFTEST] 已按 agent 判断重新生成用例，继续验证')
+                                    continue
+                                }
+                            }
+                            log('warn', '[SELFTEST] 用例期望值可疑且无法重新生成，按可疑用例收尾')
+                            stopReason = 'suspect'
+                            break
                         }
                         log('warn', '[SELFTEST] agent 调试没有产出可用代码')
                     }
@@ -274,9 +300,9 @@ export function createSelfTest({ llmText, escalate, log, config }) {
         function finishFailure(reason, finalCode, usedAttempts, usedRepairs, allCases, failedIndex, usedEscalations = 0) {
             const ms = Date.now() - started
             const failures = failedIndex >= 0 ? (caseFailures.get(failedIndex) ?? 0) : 0
-            const suspect = failedIndex >= 0
+            const suspect = reason === 'suspect' || (failedIndex >= 0
                 && failures >= maxCaseFailures
-                && allCases.every((_, index) => index === failedIndex || (casePasses.get(index) ?? 0) >= Math.max(1, maxCaseFailures - 1))
+                && allCases.every((_, index) => index === failedIndex || (casePasses.get(index) ?? 0) >= Math.max(1, maxCaseFailures - 1)))
             const clip = (text, limit = 60) => {
                 const value = String(text ?? '').replace(/\s+/gu, ' ').trim()
                 return value.length <= limit ? value : `${value.slice(0, limit)}…`
@@ -286,11 +312,13 @@ export function createSelfTest({ llmText, escalate, log, config }) {
                 : ''
             const compileNote = failedIndex < 0 ? `编译失败——${clip(firstLine(lastError), 80)}` : ''
             const detailText = caseNote !== '' ? `${caseNote}。` : `${compileNote}。`
-            const statusLine = reason === 'timeout'
-                ? `（主机验证超时（${Math.round(budgetMs / 1000)} 秒）：${detailText}下面是最后一版代码）`
-                : reason === 'attempts'
-                    ? `（主机验证已尝试 ${usedAttempts} 次仍未通过：${detailText}下面是最后一版代码）`
-                    : `（主机验证未通过：${detailText}已尝试 ${usedAttempts} 次、重写 ${usedRepairs} 次后停止，下面是最后一版代码）`
+            const statusLine = reason === 'suspect'
+                ? `（编译通过；第 ${failedIndex + 1} 组生成用例的期望值可疑：期望 ${clip(allCases[failedIndex]?.expected)}，实际 ${clip(lastActual)}；下面是已通过编译的代码）`
+                : reason === 'timeout'
+                    ? `（主机验证超时（${Math.round(budgetMs / 1000)} 秒）：${detailText}下面是最后一版代码）`
+                    : reason === 'attempts'
+                        ? `（主机验证已尝试 ${usedAttempts} 次仍未通过：${detailText}下面是最后一版代码）`
+                        : `（主机验证未通过：${detailText}已尝试 ${usedAttempts} 次、重写 ${usedRepairs} 次后停止，下面是最后一版代码）`
             const summary = '[SELFTEST] status=failed'
                 + ` reason=${reason || 'unknown'} compile=${compileOk ? 'ok' : 'fail'}`
                 + ` attempts=${usedAttempts} repairs=${usedRepairs} cases=${casesPassed}/${allCases.length}`

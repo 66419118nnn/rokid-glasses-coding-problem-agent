@@ -241,7 +241,7 @@ export default {
         return;
       }
 
-      this.setData({ status: '已拍好（' + usedMode + '），主机正在思考…（复杂题最多约 4 分钟）' });
+      this.setData({ status: '已拍好（' + usedMode + '），主机正在思考…（复杂题最多约 10 分钟）' });
       const mime = (photo && photo.mimeType) || 'image/jpeg';
       console.log('[v6] upload', mime, photo && photo.data ? photo.data.byteLength : 0);
       this.waitSeconds = 0;
@@ -257,7 +257,7 @@ export default {
           authorization: 'Bearer ' + BRIDGE_AK,
         },
         body: photo.data,
-        timeout: 240000,
+        timeout: 600000,
       });
       if (this.waitTimer) { clearInterval(this.waitTimer); this.waitTimer = null; }
 
