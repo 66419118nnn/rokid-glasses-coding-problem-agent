@@ -693,7 +693,10 @@ export function apply(ctx, config) {
                     requestId: 'ask',
                 })
                 answer = verified.answer.trim()
-                if (verified.status === 'skipped') answer = `${answer}\n\n（本机未做编译验证）`
+                if (verified.status === 'skipped') {
+                    if (/compiler missing/u.test(String(verified.logLine || ''))) answer = `${answer}\n\n（本机没有可用的编译器，未做编译验证）`
+                    else if (/#include|int\s+main\s*\(|```/u.test(answer)) answer = `${answer}\n\n（代码没能提取出来，未做编译验证）`
+                }
                 else if (verified.status === 'no-cases') answer = `${answer}\n\n（主机没有拿到可用测试用例，未做编译验证）`
                 log('info', `${verified.logLine} device=${deviceId} msg=ask`)
                 void appendSelfTestLog(cfg.selftestLogPath, `${verified.logLine} device=${deviceId} msg=ask status=${verified.status}`)
@@ -1148,7 +1151,10 @@ export function apply(ctx, config) {
                 })
                 answer = verified.answer.trim()
                 verifyMs = Date.now() - verifyStarted
-                if (verified.status === 'skipped') answer = `${answer}\n\n（本机未做编译验证）`
+                if (verified.status === 'skipped') {
+                    if (/compiler missing/u.test(String(verified.logLine || ''))) answer = `${answer}\n\n（本机没有可用的编译器，未做编译验证）`
+                    else if (/#include|int\s+main\s*\(|```/u.test(answer)) answer = `${answer}\n\n（代码没能提取出来，未做编译验证）`
+                }
                 else if (verified.status === 'no-cases') answer = `${answer}\n\n（主机没有拿到可用测试用例，未做编译验证）`
                 log('info', `${verified.logLine} device=${deviceId} msg=${messageId}`)
                 void appendSelfTestLog(cfg.selftestLogPath,
