@@ -68,8 +68,9 @@ Insert the plugin config in the profile's `cordis.patch.yml` (note: a later patc
         accessKey: '<YOUR_ACCESS_KEY>'
         selftestForAsk: true
         reasoningEffort: max
-        selftestEscalations: 1
-        selftestBudgetSeconds: 190
+        selftestEscalations: 2
+        selftestBudgetSeconds: 540
+        turnTimeoutSeconds: 240
         selftestWslDistro: ''        # empty = default WSL distro
 ```
 
@@ -132,7 +133,7 @@ If the host is behind NAT, let it open `ssh -R 127.0.0.1:8091:127.0.0.1:8091` to
 |---|---|
 | Glasses show "phone disconnected" | Usually an oversized preview stream overloading the runtime; make sure the preview is 640×480, not 4K |
 | Photos come out black | Check `takePhoto` mode; the app falls back `default → wide → telephoto`, and the status line shows the actual mode and luma |
-| Glasses request times out | Glasses fetch timeout 240 s, selftest budget 190 s; raising both is fine, but keep "budget + model generation < client timeout" |
+| Glasses request times out | Glasses fetch timeout 600 s, selftest budget 540 s; raising both is fine, but keep "budget + model generation < client timeout" |
 | Answer says a case failed | Compile passed; the generated expected value is suspicious (`suspect-case=1`). Not a compile failure |
 | Public 502 | Check the tunnel, the reverse proxy target (8091), and `/health` |
 | Garbled logs | Logs are UTF-8; on Windows use `Get-Content -Encoding UTF8 -Tail 60` |

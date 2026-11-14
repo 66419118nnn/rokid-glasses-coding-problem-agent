@@ -70,8 +70,9 @@ export const QUESTION = '这是一道编程题的照片，请按系统提示解�
         accessKey: '<YOUR_ACCESS_KEY>'
         selftestForAsk: true
         reasoningEffort: max
-        selftestEscalations: 1
-        selftestBudgetSeconds: 190
+        selftestEscalations: 2
+        selftestBudgetSeconds: 540
+        turnTimeoutSeconds: 240
         selftestWslDistro: ''        # 留空 = 默认 WSL 发行版
 ```
 
@@ -134,7 +135,7 @@ cloudflared tunnel --url http://127.0.0.1:8091
 |---|---|
 | 眼镜显示“手机已断开” | 多为取景流过大拖垮运行时；确认预览是 640×480，不要申请 4K |
 | 拍出来全黑 | 检查 `takePhoto` 的 `mode`；代码会依次退 `default → wide → telephoto`，状态行会显示实际模式与亮度 |
-| 眼镜端超时 | 眼镜 fetch 超时 240s、自检预算 190s；难题可调大两处，但要保证“预算 + 模型生成 < 客户端超时” |
+| 眼镜端超时 | 眼镜 fetch 超时 600s、自检预算 540s；难题可调大两处，但要保证“预算 + 模型生成 < 客户端超时” |
 | 答案带“某组用例未通过” | 编译通过，个别生成用例期望值可疑（日志 `suspect-case=1`），不是代码没跑 |
 | 公网 502 | 看隧道是否在线、反代是否指向 8091、`/health` 是否通 |
 | 日志乱码 | 日志按 UTF-8 写入；Windows 下用 `Get-Content -Encoding UTF8 -Tail 60` |
