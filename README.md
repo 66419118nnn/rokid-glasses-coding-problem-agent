@@ -61,8 +61,8 @@ This is not "the model says it checked itself". The host actually compiles the g
 |---|---|---|
 | Easy (sum, palindrome) | 15–25 s | compiles, 3/3 cases pass |
 | Medium (LIS, edge cases) | 30–60 s | mostly 3/3; a suspicious case is flagged |
-| Hard / suspicious cases | 2–9 min | up to two 240 s deep-debug rounds; suspect cases are flagged |
-| Fallback | ≤ 10 min | glasses timeout 600 s; selftest budget 540 s |
+| Hard / suspicious cases | 1–3.5 min | one 120 s deep-debug round; suspect cases are flagged |
+| Fallback | ≤ 4 min | glasses timeout 600 s; selftest budget 210 s |
 
 ### Expected / not expected
 
@@ -99,7 +99,7 @@ This is not "the model says it checked itself". The host actually compiles the g
 
 - The status line refreshes every 10 s: "host is still thinking, waited N s… (you can keep waiting)"
 - The counter is local to the glasses, so it keeps ticking even while the host is busy
-- Maximum wait: 600 s; the host's selftest budget is 540 s
+- Maximum wait: 600 s (the host aims to answer within ~4 min); the selftest budget is 210 s
 
 ### 4. Answer and paging
 
