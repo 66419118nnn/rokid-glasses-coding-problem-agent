@@ -73,7 +73,7 @@ export const QUESTION = '这是一道编程题的照片，请按系统提示解�
         selftestEscalations: 1
         selftestBudgetSeconds: 210
         turnTimeoutSeconds: 120
-        selftestMaxCaseFailures: 5
+        selftestMaxCaseFailures: 3
         selftestMaxAttempts: 8
         selftestWslDistro: ''        # 留空 = 默认 WSL 发行版
 ```

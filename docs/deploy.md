@@ -71,7 +71,7 @@ Insert the plugin config in the profile's `cordis.patch.yml` (note: a later patc
         selftestEscalations: 1
         selftestBudgetSeconds: 210
         turnTimeoutSeconds: 120
-        selftestMaxCaseFailures: 5
+        selftestMaxCaseFailures: 3
         selftestMaxAttempts: 8
         selftestWslDistro: ''        # empty = default WSL distro
 ```

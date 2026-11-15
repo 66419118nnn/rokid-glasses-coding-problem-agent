@@ -203,6 +203,8 @@ export function createSelfTest({ llmText, escalate, log, config }) {
                     }
                     if (suspectNow) {
                         log('warn', '[SELFTEST] 只有这一组用例反复失败而其它都通过，判定为用例期望值可疑，不再升级调试')
+                        stopReason = 'suspect'
+                        break
                     }
                     // Mechanical rewriting stopped helping: hand the problem to the
                     // agent session, which can actually compile and debug with tools.
