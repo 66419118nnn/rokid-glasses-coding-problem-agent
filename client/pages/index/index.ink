@@ -27,6 +27,8 @@ export default {
     diag: '',
     previewSrc: '',
     photoSrc: '',
+    shotCount: 0,
+    confirmFocus: 0,
     scrollTop: 0,
     busy: false,
   },
@@ -36,7 +38,9 @@ export default {
     this.stream = null;
     this.previewUrl = '';
     this.previewReady = false;
-    console.log('[v6] onLoad');
+    this.shots = [];
+    this.captureMode = 'new';
+    console.log('[v8] onLoad');
     this.startCamera();
   },
 
@@ -61,6 +65,21 @@ export default {
 
   onKeyDown(event) {
     const code = event && event.code;
+    if (this.data.phase === 'confirm') {
+      if (code === 'ArrowUp' || code === 'ArrowDown') {
+        const next = (this.data.confirmFocus + (code === 'ArrowDown' ? 1 : 2)) % 3;
+        this.setData({ confirmFocus: next });
+        console.log('[v8] confirm focus', next);
+        return;
+      }
+      if (code === 'Enter') {
+        if (this.lastConfirmAt && Date.now() - this.lastConfirmAt < 800) return;
+        this.lastConfirmAt = Date.now();
+        this.activateConfirm();
+        return;
+      }
+      return;
+    }
     if (code === 'Enter') {
       this.triggerCapture('enter');
       return;
@@ -71,8 +90,14 @@ export default {
       const next = Math.max(0, base + delta);
       this.answerScrollTop = next;
       this.setData({ scrollTop: next });
-      console.log('[v6] scroll', next);
+      console.log('[v8] scroll', next);
     }
+  },
+
+  activateConfirm() {
+    if (this.data.confirmFocus === 1) this.addShot();
+    else if (this.data.confirmFocus === 2) this.retake();
+    else this.confirmUpload();
   },
 
   onAnswerScroll(event) {
@@ -100,11 +125,12 @@ export default {
     }
   },
 
-  startCamera() {
+  startCamera(keepShots = false) {
     this.stopCamera();
+    if (!keepShots) this.shots = [];
     this.pendingPhoto = null;
     this.answerScrollTop = 0;
-    this.setData({ phase: 'aim', busy: false, answer: '', diag: '', photoSrc: '', scrollTop: 0, status: '相机启动中…' });
+    this.setData({ phase: 'aim', busy: false, answer: '', diag: '', photoSrc: '', shotCount: 0, confirmFocus: 0, scrollTop: 0, status: '相机启动中…' });
     try {
       if (typeof wx === 'undefined' || !wx.media || typeof wx.media.createCameraContext !== 'function') {
         this.setData({ status: '这个运行时不支持 wx.media 相机' });
@@ -246,15 +272,28 @@ export default {
       }
 
       const mime = (photo && photo.mimeType) || 'image/jpeg';
-      this.pendingPhoto = { data: photo.data, mimeType: mime, info, usedMode };
-      const preview = await this.makeConfirmImage(photo.data, mime);
-      console.log('[v7] confirm', usedMode, info.width + 'x' + info.height, preview ? 'preview-ok' : 'no-preview');
+      const shot = { data: photo.data, mimeType: mime, info, usedMode };
+      if (!Array.isArray(this.shots)) this.shots = [];
+      if (this.captureMode === 'append' && this.shots.length < 3) {
+        this.shots.push(shot);
+      } else if (this.captureMode === 'replace' && this.shots.length > 0) {
+        this.shots[this.shots.length - 1] = shot;
+      } else {
+        this.shots = [shot];
+      }
+      this.captureMode = 'new';
+      const latest = this.shots[this.shots.length - 1];
+      const preview = await this.makeConfirmImage(latest.data, latest.mimeType);
+      const count = this.shots.length;
+      console.log('[v8] confirm', count, latest.usedMode, latest.info.width + 'x' + latest.info.height, preview ? 'preview-ok' : 'no-preview');
       this.setData({
         phase: 'confirm',
         busy: false,
         photoSrc: preview,
-        status: '已拍好（' + usedMode + ' ' + info.width + '×' + info.height + ' 亮度 ' + info.luma + '）',
-        hint: '确认题目完整、数据范围都在画面里，再提交',
+        shotCount: count,
+        confirmFocus: 0,
+        status: '已拍 ' + count + ' 张（最新 ' + latest.usedMode + ' ' + latest.info.width + '×' + latest.info.height + ' 亮度 ' + latest.info.luma + '）',
+        hint: '上下滑动选择，单击确认；题目没拍全就再拍一张',
         diag: '',
       });
     } catch (error) {
@@ -289,12 +328,16 @@ export default {
 
   async confirmUpload() {
     if (this.data.busy) return;
-    const pending = this.pendingPhoto;
-    if (!pending) { this.setData({ status: '没有待提交的照片，重拍一张' }); return; }
-    const mime = pending.mimeType || 'image/jpeg';
+    const shots = this.shots || [];
+    if (shots.length === 0) { this.setData({ status: '没有待提交的照片，重拍一张' }); return; }
     this.setData({ busy: true, phase: 'busy', photoSrc: '', status: '已提交，主机正在思考…（复杂题最多约 10 分钟）' });
     try {
-      console.log('[v7] upload', mime, pending.data ? pending.data.byteLength : 0);
+      const composite = await this.composeShots(shots);
+      if (!composite) throw new Error('照片合成失败');
+      const mime = composite.mimeType || 'image/jpeg';
+      const label = shots.length > 1 ? '拼接 ' + shots.length + ' 张' : composite.usedMode;
+      const info = composite.info || { width: 0, height: 0 };
+      console.log('[v8] upload', mime, composite.data ? composite.data.byteLength : 0, label);
       this.waitSeconds = 0;
       if (this.waitTimer) clearInterval(this.waitTimer);
       this.waitTimer = setInterval(() => {
@@ -307,7 +350,7 @@ export default {
           'content-type': mime,
           authorization: 'Bearer ' + BRIDGE_AK,
         },
-        body: pending.data,
+        body: composite.data,
         timeout: 600000,
       });
       if (this.waitTimer) { clearInterval(this.waitTimer); this.waitTimer = null; }
@@ -322,13 +365,13 @@ export default {
       }
 
       const data = await response.json();
-      console.log('[v7] answer', response.status, String(data.answer || '').length + 'chars');
-      this.pendingPhoto = null;
+      console.log('[v8] answer', response.status, String(data.answer || '').length + 'chars');
+      this.shots = [];
       this.answerScrollTop = 0;
       this.setData({
         phase: 'answer',
         busy: false,
-        status: '来源：' + pending.usedMode + ' ' + pending.info.width + '×' + pending.info.height + ' 亮度 ' + pending.info.luma,
+        status: '来源：' + label + ' ' + info.width + '×' + info.height,
         hint: '上下滑动翻页；单击镜腿再拍一张',
         answer: data.answer || '(空)',
         scrollTop: 0,
@@ -337,15 +380,61 @@ export default {
     } catch (error) {
       if (this.waitTimer) { clearInterval(this.waitTimer); this.waitTimer = null; }
       const message = error && error.message ? error.message : String(error);
-      console.error('[v7] upload error', message);
+      console.error('[v8] upload error', message);
       this.setData({ busy: false, status: '出错：' + message });
       this.startCamera();
       this.setData({ status: '出错：' + message });
     }
   },
 
+  // 多张照片按顺序竖向拼接成一张，交给现有的单图 /ask-raw。
+  async composeShots(shots) {
+    if (!shots || shots.length === 0) return null;
+    if (shots.length === 1) {
+      return { data: shots[0].data, mimeType: shots[0].mimeType, info: shots[0].info, usedMode: shots[0].usedMode };
+    }
+    try {
+      const bitmaps = [];
+      for (const shot of shots) {
+        bitmaps.push(await createImageBitmap(new Blob([shot.data], { type: shot.mimeType || 'image/jpeg' })));
+      }
+      const width = 1080;
+      const heights = bitmaps.map((item) => Math.max(1, Math.round((item.height / item.width) * width)));
+      const total = heights.reduce((a, b) => a + b, 0);
+      const canvas = new Canvas(width, total);
+      const context = canvas.getContext('2d');
+      let y = 0;
+      for (let i = 0; i < bitmaps.length; i += 1) {
+        context.drawImage(bitmaps[i], 0, y, width, heights[i]);
+        y += heights[i];
+        bitmaps[i].close();
+      }
+      const out = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.9 });
+      const data = await out.arrayBuffer();
+      console.log('[v8] composed', shots.length, width + 'x' + total, data.byteLength + 'B');
+      return { data, mimeType: 'image/jpeg', info: { width, height: total }, usedMode: '拼接' + shots.length + '张' };
+    } catch (error) {
+      console.log('[v8] compose failed', error && error.message ? error.message : String(error));
+      return null;
+    }
+  },
+
+  addShot() {
+    if (this.data.busy) return;
+    if ((this.shots || []).length >= 3) { this.setData({ status: '最多 3 张，先提交或重拍' }); return; }
+    this.captureMode = 'append';
+    this.startCamera(true);
+  },
+
   retake() {
     if (this.data.busy) return;
+    if (this.data.phase === 'confirm' && (this.shots || []).length > 0) {
+      this.captureMode = 'replace';
+      this.startCamera(true);
+      return;
+    }
+    this.captureMode = 'new';
+    this.shots = [];
     this.startCamera();
   },
 };
@@ -393,8 +482,11 @@ export default {
     </view>
 
     <button ink:if="{{phase === 'aim'}}" class="shoot" bindtap="onShootTap">拍摄</button>
-    <button ink:if="{{phase === 'confirm'}}" class="shoot" bindtap="confirmUpload">确认提交</button>
-    <button ink:if="{{phase === 'confirm'}}" class="shoot secondary" bindtap="retake">重拍</button>
+    <view class="confirm-actions" ink:if="{{phase === 'confirm'}}">
+      <button class="shoot {{confirmFocus === 0 ? 'focused' : ''}}" bindtap="confirmUpload">提交 {{shotCount}} 张</button>
+      <button class="shoot secondary {{confirmFocus === 1 ? 'focused' : ''}}" bindtap="addShot">再拍一张</button>
+      <button class="shoot secondary {{confirmFocus === 2 ? 'focused' : ''}}" bindtap="retake">重拍</button>
+    </view>
     <button ink:if="{{phase === 'answer'}}" class="shoot" bindtap="onShootTap">再拍一张</button>
   </view>
 </page>
@@ -484,5 +576,24 @@ export default {
     color: #7CFF7C;
     background-color: #001800;
     border: 1px solid #1E4A1E;
+  }
+
+  .confirm-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    padding: 0 12px 10px 12px;
+  }
+
+  .confirm-actions .shoot {
+    flex: 1;
+    margin: 0;
+    height: 40px;
+    padding: 0;
+    font-size: 15px;
+  }
+
+  .focused {
+    border: 2px solid #E8FFE8;
   }
 </style>
