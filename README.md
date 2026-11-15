@@ -51,9 +51,10 @@ This is not "the model says it checked itself". The host actually compiles the g
 1. Say "open <your-agent>" on the glasses
 2. A 640×480 low-bitrate viewfinder appears
 3. Aim at the problem and **single-click the temple** → full-frame 3024×4032 photo
-4. The photo is uploaded; the status line refreshes every 10 s ("host is still thinking, waited N s")
-5. Host: model answers → extract C++ → `g++` compiles → run 3 test cases → feed failures back for a rewrite
-6. The answer appears on the glasses, ending with "passed compile and N test cases"; swipe up/down to scroll
+4. A confirmation screen shows the **actual captured photo**; confirm to upload, or retake if the problem or data range is cut off
+5. The photo is uploaded; the status line refreshes every 10 s ("host is still thinking, waited N s")
+6. Host: model answers → extract C++ → `g++` compiles → run 3 test cases → feed failures back for a rewrite
+7. The answer appears on the glasses, ending with "passed compile and N test cases"; swipe up/down to scroll
 
 ### Measured latency (Windows + WSL g++ 15.2 + DeepSeek V4.1 Flash, effort=max)
 

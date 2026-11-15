@@ -11,6 +11,7 @@ import { BRIDGE_URL, BRIDGE_AK, QUESTION } from '../../config.js';
 // 低于这个平均亮度就当成“相机还没出画面”，重拍，不把黑图发给模型。
 const MIN_LUMA = 12;
 const MODES = ['default', 'wide', 'telephoto'];
+const PREVIEW_WAIT_MS = 3000;
 const SCROLL_STEP = 130;
 
 function sleep(ms) {
@@ -19,12 +20,13 @@ function sleep(ms) {
 
 export default {
   data: {
-    phase: 'aim',        // aim | busy | answer
+    phase: 'aim',        // aim | busy | confirm | answer
     status: '相机启动中…',
     hint: '单击镜腿拍照',
     answer: '',
     diag: '',
     previewSrc: '',
+    photoSrc: '',
     scrollTop: 0,
     busy: false,
   },
@@ -53,6 +55,7 @@ export default {
     this.lastTriggerAt = Date.now();
     console.log('[v6] trigger', source);
     if (this.data.phase === 'answer') this.retake();
+    else if (this.data.phase === 'confirm') this.confirmUpload();
     else this.shoot();
   },
 
@@ -99,8 +102,9 @@ export default {
 
   startCamera() {
     this.stopCamera();
+    this.pendingPhoto = null;
     this.answerScrollTop = 0;
-    this.setData({ phase: 'aim', busy: false, answer: '', diag: '', scrollTop: 0, status: '相机启动中…' });
+    this.setData({ phase: 'aim', busy: false, answer: '', diag: '', photoSrc: '', scrollTop: 0, status: '相机启动中…' });
     try {
       if (typeof wx === 'undefined' || !wx.media || typeof wx.media.createCameraContext !== 'function') {
         this.setData({ status: '这个运行时不支持 wx.media 相机' });
@@ -241,9 +245,56 @@ export default {
         return;
       }
 
-      this.setData({ status: '已拍好（' + usedMode + '），主机正在思考…（复杂题最多约 10 分钟）' });
       const mime = (photo && photo.mimeType) || 'image/jpeg';
-      console.log('[v6] upload', mime, photo && photo.data ? photo.data.byteLength : 0);
+      this.pendingPhoto = { data: photo.data, mimeType: mime, info, usedMode };
+      const preview = await this.makeConfirmImage(photo.data, mime);
+      console.log('[v7] confirm', usedMode, info.width + 'x' + info.height, preview ? 'preview-ok' : 'no-preview');
+      this.setData({
+        phase: 'confirm',
+        busy: false,
+        photoSrc: preview,
+        status: '已拍好（' + usedMode + ' ' + info.width + '×' + info.height + ' 亮度 ' + info.luma + '）',
+        hint: '确认题目完整、数据范围都在画面里，再提交',
+        diag: '',
+      });
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      console.error('[v7] error', message);
+      this.setData({ busy: false, status: '出错：' + message });
+      this.startCamera();
+      this.setData({ status: '出错：' + message });
+    }
+  },
+
+  // 生成一张缩略图给确认页：只用于让用户核对取景，不参与上传。
+  async makeConfirmImage(data, mimeType) {
+    try {
+      const blob = new Blob([data], { type: mimeType || 'image/jpeg' });
+      const bitmap = await createImageBitmap(blob);
+      const width = 480;
+      const height = Math.max(1, Math.round((bitmap.height / bitmap.width) * width));
+      const canvas = new Canvas(width, height);
+      const context = canvas.getContext('2d');
+      context.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
+      const out = await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.8 });
+      const buffer = await out.arrayBuffer();
+      if (typeof wx === 'undefined' || typeof wx.arrayBufferToBase64 !== 'function') return '';
+      return 'data:image/jpeg;base64,' + wx.arrayBufferToBase64(buffer);
+    } catch (error) {
+      console.log('[v7] confirm image failed', error && error.message ? error.message : String(error));
+      return '';
+    }
+  },
+
+  async confirmUpload() {
+    if (this.data.busy) return;
+    const pending = this.pendingPhoto;
+    if (!pending) { this.setData({ status: '没有待提交的照片，重拍一张' }); return; }
+    const mime = pending.mimeType || 'image/jpeg';
+    this.setData({ busy: true, phase: 'busy', photoSrc: '', status: '已提交，主机正在思考…（复杂题最多约 10 分钟）' });
+    try {
+      console.log('[v7] upload', mime, pending.data ? pending.data.byteLength : 0);
       this.waitSeconds = 0;
       if (this.waitTimer) clearInterval(this.waitTimer);
       this.waitTimer = setInterval(() => {
@@ -256,7 +307,7 @@ export default {
           'content-type': mime,
           authorization: 'Bearer ' + BRIDGE_AK,
         },
-        body: photo.data,
+        body: pending.data,
         timeout: 600000,
       });
       if (this.waitTimer) { clearInterval(this.waitTimer); this.waitTimer = null; }
@@ -271,20 +322,22 @@ export default {
       }
 
       const data = await response.json();
-      console.log('[v6] answer', response.status, String(data.answer || '').length + 'chars');
+      console.log('[v7] answer', response.status, String(data.answer || '').length + 'chars');
+      this.pendingPhoto = null;
       this.answerScrollTop = 0;
       this.setData({
         phase: 'answer',
         busy: false,
-        status: '来源：' + usedMode + ' ' + info.width + '×' + info.height + ' 亮度 ' + info.luma,
+        status: '来源：' + pending.usedMode + ' ' + pending.info.width + '×' + pending.info.height + ' 亮度 ' + pending.info.luma,
         hint: '上下滑动翻页；单击镜腿再拍一张',
         answer: data.answer || '(空)',
         scrollTop: 0,
+        photoSrc: '',
       });
     } catch (error) {
       if (this.waitTimer) { clearInterval(this.waitTimer); this.waitTimer = null; }
       const message = error && error.message ? error.message : String(error);
-      console.error('[v6] error', message);
+      console.error('[v7] upload error', message);
       this.setData({ busy: false, status: '出错：' + message });
       this.startCamera();
       this.setData({ status: '出错：' + message });
@@ -311,6 +364,17 @@ export default {
       bindplaying="onPreviewPlaying"
     ></video>
 
+    <image
+      ink:if="{{phase === 'confirm' && photoSrc}}"
+      class="shot-img"
+      src="{{photoSrc}}"
+      mode="aspectFit"
+    ></image>
+
+    <view class="confirm-fallback" ink:if="{{phase === 'confirm' && !photoSrc}}">
+      <text class="hint">已拍照。确认题目完整、数据范围都在画面里，再提交；看不到照片也可以重拍。</text>
+    </view>
+
     <view class="statusbar" ink:if="{{status}}">
       <text class="status">{{status}}</text>
       <text class="diag" ink:if="{{diag}}">{{diag}}</text>
@@ -324,7 +388,13 @@ export default {
       <text class="hint">{{hint}}</text>
     </view>
 
+    <view class="footer" ink:if="{{phase === 'confirm'}}">
+      <text class="hint">{{hint}}</text>
+    </view>
+
     <button ink:if="{{phase === 'aim'}}" class="shoot" bindtap="onShootTap">拍摄</button>
+    <button ink:if="{{phase === 'confirm'}}" class="shoot" bindtap="confirmUpload">确认提交</button>
+    <button ink:if="{{phase === 'confirm'}}" class="shoot secondary" bindtap="retake">重拍</button>
     <button ink:if="{{phase === 'answer'}}" class="shoot" bindtap="onShootTap">再拍一张</button>
   </view>
 </page>
@@ -342,6 +412,20 @@ export default {
     width: 100%;
     height: 46%;
     background-color: #000000;
+  }
+
+  .shot-img {
+    width: 100%;
+    height: 52%;
+    background-color: #000000;
+  }
+
+  .confirm-fallback {
+    flex: 1;
+    padding: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .statusbar {
@@ -393,5 +477,12 @@ export default {
     font-size: 17px;
     color: #001800;
     background-color: #7CFF7C;
+  }
+
+  .secondary {
+    margin-top: 0;
+    color: #7CFF7C;
+    background-color: #001800;
+    border: 1px solid #1E4A1E;
   }
 </style>

@@ -19,10 +19,11 @@ Rokid 眼镜上的拍题应用：单击镜腿触发拍照，照片上传到自�
 
 - `wx.media.createCameraContext().takePhoto({ quality: 'high', mode: 'default' })`
 - 黑帧检测：抽样算平均亮度，低于 12 重拍；`default` 无画面时依次退 `wide`、`telephoto`
+- 拍完进入确认页：显示实际照片缩略图，确认题目完整、数据范围都在画面里再提交；否则重拍
 - 状态行显示来源模式、像素尺寸、平均亮度
 
 ## 上传
 
-- `POST <BRIDGE_URL>?q=...`，原始图片字节，`Authorization: Bearer <BRIDGE_AK>`，超时 240 秒
+- `POST <BRIDGE_URL>?q=...`，原始图片字节，`Authorization: Bearer <BRIDGE_AK>`，超时 600 秒
 - 等待期间每 10 秒刷新「主机还在思考，已等 N 秒…（可以继续等）」
 - 配置在 `config.js`，部署前填自己的地址和 AK
